@@ -13,8 +13,6 @@ st.set_page_config(
 )
 
 # --- SELF-CONTAINED DATA with KOLLYWOOD MOVIES ---
-# This data is embedded directly in the script to avoid all external file/URL issues.
-# The formatting has been corrected to prevent IndentationError.
 MOVIE_DATA = """id,title,overview,genres
 19995,Avatar,"In the 22nd century, a paraplegic Marine is dispatched to the moon Pandora on a unique mission, but becomes torn between following orders and protecting the world he feels is his home.","[{""id"": 28, ""name"": ""Action""}, {""id"": 12, ""name"": ""Adventure""}, {""id"": 14, ""name"": ""Fantasy""}, {""id"": 878, ""name"": ""Science Fiction""}]"
 27205,Inception,"Cobb, a skilled thief who commits corporate espionage by infiltrating the subconscious of his targets, is offered a chance to regain his old life as payment for a task considered to be impossible: ""inception"", the implantation of another person's idea into a target's subconscious.","[{""id"": 28, ""name"": ""Action""}, {""id"": 878, ""name"": ""Science Fiction""}, {""id"": 12, ""name"": ""Adventure""}]"
@@ -36,38 +34,44 @@ def load_model():
     """Loads the sentence-transformer model."""
     return SentenceTransformer('all-MiniLM-L6-v2')
 
+def format_genres(genres_str):
+    """Helper function to format the genre string into a simple list of names."""
+    try:
+        genres_list = json.loads(genres_str.replace("'", '"'))
+        return [genre['name'] for genre in genres_list]
+    except:
+        return [] # Return empty list if formatting fails
+
 @st.cache_data
-def load_movie_data():
-    """Loads the movie data from the embedded string in the script."""
-    # Use io.StringIO to treat the string data as a file
+def load_and_prepare_data():
+    """Loads data, formats genres, and creates a combined search text."""
     movies_df = pd.read_csv(io.StringIO(MOVIE_DATA))
+    movies_df['genre_list'] = movies_df['genres'].apply(format_genres)
+    
+    # --- THIS IS THE KEY UPGRADE ---
+    # Create a 'search_text' column that combines title, genres, and overview.
+    # This gives the AI rich context for matching user moods and genres.
+    movies_df['search_text'] = movies_df.apply(
+        lambda row: f"{row['title']}. Genres: {', '.join(row['genre_list'])}. Overview: {row['overview']}",
+        axis=1
+    )
     return movies_df
 
 @st.cache_data(show_spinner="Analyzing movie database...")
 def create_movie_embeddings(_model, df):
-    """Creates numerical embeddings for movie overviews."""
-    return _model.encode(df['overview'].tolist(), convert_to_tensor=True)
-
-def format_genres(genres_str):
-    """Helper function to format the genre string for display."""
-    try:
-        # The genre data is a string representation of a list of dictionaries
-        genres_list = json.loads(genres_str.replace("'", '"'))
-        return ', '.join([genre['name'] for genre in genres_list])
-    except:
-        return "N/A" # Return N/A if formatting fails
+    """Creates numerical embeddings for the 'search_text'."""
+    return _model.encode(df['search_text'].tolist(), convert_to_tensor=True)
 
 # --- MAIN APP LOGIC ---
 
 model = load_model()
-movies_df = load_movie_data()
+movies_df = load_and_prepare_data()
 movie_embeddings = create_movie_embeddings(model, movies_df)
 
 def find_similar_movies(query, top_k=3):
     """Finds movies similar to a user's query."""
     query_embedding = model.encode(query, convert_to_tensor=True)
     cosine_scores = util.cos_sim(query_embedding, movie_embeddings)
-    # Ensure k is not larger than the number of movies
     top_k = min(top_k, len(movies_df))
     top_results = torch.topk(cosine_scores, k=top_k)
     return top_results.indices.tolist()[0], top_results.values.tolist()[0]
@@ -76,13 +80,13 @@ def find_similar_movies(query, top_k=3):
 st.title("🎬 AI Movie Recommender (Kollywood & Hollywood)")
 st.markdown(
     """
-    Welcome! Describe a movie or a theme, and our AI will search its database of 
-    popular movies to find the perfect match for you.
+    Tell me what you're in the mood for! Just type a **genre, a feeling, or a theme**, 
+    and our AI will find the perfect movie for you.
     """
 )
 
 user_input = st.text_input(
-    "What are you in the mood for? (e.g., 'a cop chasing a villain', 'a movie about dreams inside of dreams')"
+    "What are you looking for? (e.g., 'a fun comedy', 'thriller with a good twist', 'inspirational drama')"
 )
 
 if user_input:
@@ -99,8 +103,7 @@ if user_input:
                     st.markdown(f"**{movie['title']}**")
                     st.markdown(f"_(Similarity Score: {score:.2f})_")
                     
-                    # Format genres for clean display
-                    display_genres = format_genres(movie['genres'])
+                    display_genres = ', '.join(movie['genre_list'])
                     
                     with st.expander("Details"):
                         st.write(f"**Genres:** {display_genres}")
