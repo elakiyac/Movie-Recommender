@@ -2,10 +2,10 @@ import streamlit as st
 from transformers import pipeline
 
 # --- MODEL LOADING ---
-# Use st.cache_resource to load the model only once and cache it.
+# We are using a smaller, more efficient model that fits in memory.
 @st.cache_resource
 def load_classifier():
-    return pipeline('zero-shot-classification', model="facebook/bart-large-mnli")
+    return pipeline('zero-shot-classification', model="MoritzLaurer/deberta-v3-small-zeroshot-v1")
 
 classifier = load_classifier()
 
@@ -22,8 +22,8 @@ st.markdown(
 
 # A more diverse list of genres/themes
 genres = [
-    "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", 
-    "Drama", "Family", "Fantasy", "Historical", "Horror", "Musical", "Mystery", 
+    "Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary",
+    "Drama", "Family", "Fantasy", "Historical", "Horror", "Musical", "Mystery",
     "Romance", "Sci-Fi", "Thriller", "War", "Western", "Superhero", "Mind-bending Plot Twist"
 ]
 
@@ -34,8 +34,9 @@ user_input = st.text_input(
 if user_input:
     with st.spinner('Analyzing your request...'):
         # Get the model's predictions
-        recommendations = classifier(user_input, genres, multi_label=False)
-        
+        # Set multi_label to True for better results with multiple potential genres
+        recommendations = classifier(user_input, genres, multi_label=True)
+
         st.subheader("Here are our top recommendations for you:")
 
         # Display the top 3 recommendations
