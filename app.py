@@ -77,7 +77,7 @@ def find_similar_movies(query, top_k=3):
     return top_results.indices.tolist()[0], top_results.values.tolist()[0]
 
 # --- STREAMLIT APP UI ---
-st.title("🎬 AI Movie Recommender (Kollywood & Hollywood)")
+st.title("🎬 AI Movie Recommender (BIA Induction Demo")
 st.markdown(
     """
     Tell me what you're in the mood for! Just type a **genre, a feeling, or a theme**, 
